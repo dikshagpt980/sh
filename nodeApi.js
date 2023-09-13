@@ -125,16 +125,18 @@ app.get("/purchases/reset", function (req, res, next) {
 
 app.get("/purchases", function (req, res, next) {
     let { product = "", shop = "" } = req.query;
-
     if (product || shop) {
         let query1 = "SELECT * FROM purchases WHERE ";
         let str = "";
 
         if (product) {
-            str += `productid IN (${product})`;
+            let ar = product.split(",");
+            ar = ar.map((ele)=> ele[2] );
+            str += `productid IN (${ar})`;
         }
 
         if (shop) {
+            shop = shop[2];
             str += str ? ` AND shopid IN (${shop}) ` : ` shopid IN (${shop})`;
         }
 
@@ -161,19 +163,7 @@ app.get("/purchases", function (req, res, next) {
 
 app.get("/parchases/shop/:id",function(req,res,next){
     let id = req.params.id;
-    let query = `SELECT
-            Purchases.PurchaseId,
-            Purchases.ShopId,
-            Purchases.ProductId,
-            Purchases.Quantity,
-            Purchases.Price,
-            Products.ProductName
-        FROM
-            Purchases
-        INNER JOIN
-            Products ON Purchases.ProductId = Products.ProductId
-        WHERE
-            Purchases.ShopId = $1`;
+    let query = `SELECT *FROM Purchases WHERE Purchases.ShopId = $1`;
     client.query(query,[id],function(err,result){
         if (err) {
             res.status(400).send(err);
@@ -182,22 +172,27 @@ app.get("/parchases/shop/:id",function(req,res,next){
     })
 })
 
-app.get("/totalPurchases/shop/:id", function (req, res, next) {
+app.get("/parchases/product/:id",function(req,res,next){
     let id = req.params.id;
-    let query = `SELECT
-            Purchases.PurchaseId,
-            Purchases.ShopId,
-            Purchases.ProductId,
-            SUM(Purchases.Quantity) AS TotalQuantity,
-            Products.ProductName
-        FROM
-            Purchases
-        INNER JOIN
-            Products ON Purchases.ProductId = Products.ProductId
-        WHERE
-            Purchases.ShopId = $1
-        GROUP BY
-            Products.ProductName;`;
+    let query = `SELECT * FROM Purchases WHERE Purchases.ProductId = $1`;
+    client.query(query,[id],function(err,result){
+        if (err) {
+            res.status(400).send(err);
+        }
+        res.send(result.rows);
+    });
+});
+
+app.get("/totalPurchase/shop/:id", function (req, res, next) {
+    let id = req.params.id;
+    let query = `SELECT MAX(Purchases.PurchaseId) AS PurchaseId,
+                 Purchases.ProductId,
+                Purchases.ShopId,
+                SUM(Purchases.Quantity) AS Quantity ,MAX(Purchases.Price) AS Price
+                FROM Purchases Where
+                Purchases.ShopId = $1
+                GROUP BY
+                Purchases.ProductId,Purchases.ShopId`;
     client.query(query, [id], function (err, result) {
         if (err) {
             res.status(400).send(err);
@@ -205,6 +200,27 @@ app.get("/totalPurchases/shop/:id", function (req, res, next) {
         res.send(result.rows);
     });
 });
+
+app.get("/totalPurchase/product/:id", function (req, res, next) {
+    let id = req.params.id;
+    let query = `SELECT MAX(Purchases.PurchaseId) AS PurchaseId,
+                Purchases.ProductId,
+                Purchases.ShopId,
+                SUM(Purchases.Quantity) AS Quantity ,MAX(Purchases.Price) AS Price
+                FROM Purchases Where
+                Purchases.ProductId = $1
+                GROUP BY
+                Purchases.ProductId,Purchases.ShopId
+    `;
+    client.query(query, [id], function (err, result) {
+        if (err) {
+            res.status(400).send(err);
+        } else {
+            res.send(result.rows);
+        }
+    });
+});
+
 
 
 app.post("/purchases", function (req, res, next) {
